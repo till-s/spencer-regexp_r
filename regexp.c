@@ -130,7 +130,7 @@
 #define	UCHARAT(p)	((int)*(p)&CHARBITS)
 #endif
 
-#define	FAIL(m)	{ spencer_regerror(m); return(NULL); }
+#define	FAIL(m)	{ SPENCER_(regerror)(m); return(NULL); }
 #define	ISMULT(c)	((c) == '*' || (c) == '+' || (c) == '?')
 #define	META	"^$.[()|?+*\\"
 
@@ -142,14 +142,33 @@
 #define	SPSTART		04	/* Starts with * or +. */
 #define	WORST		0	/* Worst case. */
 
+/* a marker - only its address is used */
+static	char regdummy;
 /*
  * Global work variables for regcomp().
  */
-static char *regparse;		/* Input-scan pointer. */
-static int regnpar;		/* () count. */
-static char regdummy;
-static char *regcode;		/* Code-emit pointer; &regdummy = don't. */
-static long regsize;		/* Code size. */
+typedef struct RegcompCtxtRec_ {
+	const char *regparse;	/* Input-scan pointer. */
+	int regnpar;			/* () count. */
+	char *regcode;			/* Code-emit pointer; &regdummy = don't. */
+	long regsize;			/* Code size. */
+} RegcompCtxtRec, *RegcompCtxt;
+
+#define regparse	(cctx)->regparse
+#define regnpar		(cctx)->regnpar
+#define regcode		(cctx)->regcode
+#define regsize		(cctx)->regsize
+
+#define regc_body(b) \
+		if (regcode != &regdummy) \
+			*regcode++ = b; \
+		else \
+			regsize++;
+
+#define regoptail_body(p,val) \
+		/* "Operandless" and "op != BRANCH" are synonymous in practice. */ \
+		if ( !(p == NULL || p == &regdummy || OP(p) != BRANCH) ) \
+			regtail(OPERAND(p), val);
 
 /*
  * Forward declarations for regcomp()'s friends.
@@ -157,19 +176,41 @@ static long regsize;		/* Code size. */
 #ifndef STATIC
 #define	STATIC	static
 #endif
-STATIC char *reg();
-STATIC char *regbranch();
-STATIC char *regpiece();
-STATIC char *regatom();
-STATIC char *regnode();
-STATIC char *regnext();
-STATIC void regc();
-STATIC void reginsert();
-STATIC void regtail();
-STATIC void regoptail();
+STATIC char * _reg(int paren, int *flagp, RegcompCtxt cctx);
+STATIC char * _regbranch(int *flagp, RegcompCtxt cctx);
+STATIC char * _regpiece(int *flagp, RegcompCtxt cctx);
+STATIC char * _regatom(int *flagp, RegcompCtxt cctx);
+STATIC char * _regnode(char op, RegcompCtxt cctx);
+STATIC char * regnext(register char *p);
+STATIC void _regc(char b, RegcompCtxt cctx);
+STATIC void _reginsert(char op, char *opnd, RegcompCtxt cctx);
+STATIC void _regtail(char *p, char *val, RegcompCtxt cctx);
+STATIC void _regoptail(char *p, char *val, RegcompCtxt cctx);
+#define reg(paren, flagp)	_reg(paren, flagp, cctx)
+#define regbranch(flagp)	_regbranch(flagp, cctx)
+#define regpiece(flagp)		_regpiece(flagp, cctx)
+#define regatom(flagp)		_regatom(flagp, cctx)
+#define regnode(op)			_regnode(op, cctx)
+#define regc(b)				_regc(b, cctx)
+#define reginsert(op, opnd) _reginsert(op, opnd, cctx)
+#define regtail(p, val)		_regtail(p, val, cctx)
+#define regoptail(p, val)	_regoptail(p, val, cctx)
 #ifdef STRCSPN
 STATIC int strcspn();
 #endif
+
+#define _regc(b, cctx) \
+		do { \
+			char regc_body_buf=b; \
+			regc_body(regc_body_buf); \
+		} while (0)
+
+#define _regoptail(p, val, cctx) \
+		do {  \
+			char *regoptail_body_buf = p; \
+			regoptail_body(p,val); \
+		} while (0)
+
 
 /*
  - regcomp - compile a regular expression into internal code
@@ -186,16 +227,18 @@ STATIC int strcspn();
  * Beware that the optimization-preparation code in here knows about some
  * of the structure of the compiled regexp.
  */
-spencer_regexp *
-spencer_regcomp(exp)
-char *exp;
+SPENCER_(regexp) *
+SPENCER_(regcomp)(exp)
+const char *exp;
 {
-	register spencer_regexp *r;
+	register SPENCER_(regexp) *r;
 	register char *scan;
 	register char *longest;
 	register int len;
 	int flags;
 	extern char *malloc();
+	RegcompCtxtRec ctx;
+#define cctx (&ctx)
 
 	if (exp == NULL)
 		FAIL("NULL argument");
@@ -214,7 +257,7 @@ char *exp;
 		FAIL("regexp too big");
 
 	/* Allocate space. */
-	r = (spencer_regexp *)malloc(sizeof(spencer_regexp) + (unsigned)regsize);
+	r = (SPENCER_(regexp) *)malloc(sizeof(SPENCER_(regexp)) + (unsigned)regsize);
 	if (r == NULL)
 		FAIL("out of space");
 
@@ -264,6 +307,7 @@ char *exp;
 
 	return(r);
 }
+#undef cctx
 
 /*
  - reg - regular expression, i.e. main body or parenthesized thing
@@ -275,9 +319,11 @@ char *exp;
  * follows makes it hard to avoid.
  */
 static char *
-reg(paren, flagp)
-int paren;			/* Parenthesized? */
-int *flagp;
+_reg(
+	int paren,/* Parenthesized? */
+	int *flagp,
+	RegcompCtxt cctx
+   )
 {
 	register char *ret;
 	register char *br;
@@ -347,8 +393,10 @@ int *flagp;
  * Implements the concatenation operator.
  */
 static char *
-regbranch(flagp)
-int *flagp;
+_regbranch(
+	int *flagp,
+	RegcompCtxt cctx
+		 )
 {
 	register char *ret;
 	register char *chain;
@@ -386,8 +434,10 @@ int *flagp;
  * endmarker role is not redundant.
  */
 static char *
-regpiece(flagp)
-int *flagp;
+_regpiece(
+	int *flagp,
+	RegcompCtxt cctx
+		)
 {
 	register char *ret;
 	register char op;
@@ -450,8 +500,10 @@ int *flagp;
  * separate node; the code is simpler that way and it's not worth fixing.
  */
 static char *
-regatom(flagp)
-int *flagp;
+_regatom(
+	int *flagp,
+	RegcompCtxt cctx
+		)
 {
 	register char *ret;
 	int flags;
@@ -559,8 +611,10 @@ int *flagp;
  - regnode - emit a node
  */
 static char *			/* Location. */
-regnode(op)
-char op;
+_regnode(
+	char op,
+	RegcompCtxt cctx
+	   )
 {
 	register char *ret;
 	register char *ptr;
@@ -580,18 +634,19 @@ char op;
 	return(ret);
 }
 
+#ifndef _regc /* use macro ? */
 /*
  - regc - emit (if appropriate) a byte of code
  */
 static void
-regc(b)
-char b;
+_regc(
+	char b,
+	RegcompCtxt cctx
+	)
 {
-	if (regcode != &regdummy)
-		*regcode++ = b;
-	else
-		regsize++;
+	regc_body(b);
 }
+#endif
 
 /*
  - reginsert - insert an operator in front of already-emitted operand
@@ -599,9 +654,11 @@ char b;
  * Means relocating the operand.
  */
 static void
-reginsert(op, opnd)
-char op;
-char *opnd;
+_reginsert(
+	char op,
+	char *opnd,
+	RegcompCtxt cctx
+		 )
 {
 	register char *src;
 	register char *dst;
@@ -628,9 +685,11 @@ char *opnd;
  - regtail - set the next-pointer at the end of a node chain
  */
 static void
-regtail(p, val)
-char *p;
-char *val;
+_regtail(
+	char *p,
+	char *val,
+	RegcompCtxt cctx
+	   )
 {
 	register char *scan;
 	register char *temp;
@@ -656,19 +715,20 @@ char *val;
 	*(scan+2) = offset&0377;
 }
 
+#ifndef _regoptail /* use macro ? */
 /*
  - regoptail - regtail on operand of first argument; nop if operandless
  */
 static void
-regoptail(p, val)
-char *p;
-char *val;
+_regoptail(
+	char *p,
+	char *val,
+	RegcompCtxt cctx
+		 )
 {
-	/* "Operandless" and "op != BRANCH" are synonymous in practice. */
-	if (p == NULL || p == &regdummy || OP(p) != BRANCH)
-		return;
-	regtail(OPERAND(p), val);
+	regoptail_body(p,val);
 }
+#endif
 
 /*
  * regexec and friends
@@ -677,21 +737,34 @@ char *val;
 /*
  * Global work variables for regexec().
  */
-static char *reginput;		/* String-input pointer. */
-static char *regbol;		/* Beginning of input, for ^ check. */
-static char **regstartp;	/* Pointer to startp array. */
-static char **regendp;		/* Ditto for endp. */
+typedef struct RegexecCtxtRec_ {
+	const char *reginput;	/* String-input pointer. */
+	const char *regbol;		/* Beginning of input, for ^ check. */
+	const char **regstartp;	/* Pointer to startp array. */
+	const char **regendp;	/* Ditto for endp. */
+} RegexecCtxtRec, *RegexecCtxt;
+
+#define reginput	(ectx)->reginput
+#define regbol		(ectx)->regbol
+#define regstartp	(ectx)->regstartp
+#define regendp		(ectx)->regendp
 
 /*
  * Forwards.
  */
-STATIC int regtry();
-STATIC int regmatch();
-STATIC int regrepeat();
+
+STATIC int _regtry(SPENCER_(regexp) *prog, const char *strin, RegexecCtxt ectxg);
+STATIC int _regmatch(char *prog, RegexecCtxt ectx);
+STATIC int _regrepeat(char *p, RegexecCtxt ectx);
+
+#define regtry(prog, strin)	_regtry(prog, strin, ectx)
+#define regmatch(prog)		_regmatch(prog, ectx)
+#define regrepeat(p)		_regrepeat(p, ectx)
+
 
 #ifdef DEBUG
 int regnarrate = 0;
-void spencer_regdump();
+void SPENCER_(regdump)();
 STATIC char *regprop();
 #endif
 
@@ -699,21 +772,23 @@ STATIC char *regprop();
  - regexec - match a regexp against a string
  */
 int
-spencer_regexec(prog, string)
-register spencer_regexp *prog;
-register char *string;
+SPENCER_(regexec)(prog, string)
+register SPENCER_(regexp) *prog;
+register const char *string;
 {
-	register char *s;
+	register const char *s;
+	RegexecCtxtRec ctx;
+#define ectx (&ctx)
 
 	/* Be paranoid... */
 	if (prog == NULL || string == NULL) {
-		spencer_regerror("NULL parameter");
+		SPENCER_(regerror)("NULL parameter");
 		return(0);
 	}
 
 	/* Check validity of program. */
 	if (UCHARAT(prog->program) != MAGIC) {
-		spencer_regerror("corrupted program");
+		SPENCER_(regerror)("corrupted program");
 		return(0);
 	}
 
@@ -755,18 +830,21 @@ register char *string;
 	/* Failure. */
 	return(0);
 }
+#undef ectx
 
 /*
  - regtry - try match at specific point
  */
 static int			/* 0 failure, 1 success */
-regtry(prog, string)
-spencer_regexp *prog;
-char *string;
+_regtry(
+	SPENCER_(regexp) *prog,
+	const char *string,
+	RegexecCtxt ectx
+	  )
 {
 	register int i;
-	register char **sp;
-	register char **ep;
+	register const char **sp;
+	register const char **ep;
 
 	reginput = string;
 	regstartp = prog->startp;
@@ -797,8 +875,10 @@ char *string;
  * by recursion.
  */
 static int			/* 0 failure, 1 success */
-regmatch(prog)
-char *prog;
+_regmatch(
+	char *prog,
+	RegexecCtxt ectx
+		)
 {
 	register char *scan;	/* Current node. */
 	char *next;		/* Next node. */
@@ -867,7 +947,7 @@ char *prog;
 		case OPEN+8:
 		case OPEN+9: {
 				register int no;
-				register char *save;
+				register const char *save;
 
 				no = OP(scan) - OPEN;
 				save = reginput;
@@ -895,7 +975,7 @@ char *prog;
 		case CLOSE+8:
 		case CLOSE+9: {
 				register int no;
-				register char *save;
+				register const char *save;
 
 				no = OP(scan) - CLOSE;
 				save = reginput;
@@ -914,7 +994,7 @@ char *prog;
 			}
 			break;
 		case BRANCH: {
-				register char *save;
+				register const char *save;
 
 				if (OP(next) != BRANCH)		/* No choice. */
 					next = OPERAND(scan);	/* Avoid recursion. */
@@ -935,7 +1015,7 @@ char *prog;
 		case PLUS: {
 				register char nextch;
 				register int no;
-				register char *save;
+				register const char *save;
 				register int min;
 
 				/*
@@ -964,7 +1044,7 @@ char *prog;
 			return(1);	/* Success! */
 			break;
 		default:
-			spencer_regerror("memory corruption");
+			SPENCER_(regerror)("memory corruption");
 			return(0);
 			break;
 		}
@@ -976,7 +1056,7 @@ char *prog;
 	 * We get here only if there's trouble -- normally "case END" is
 	 * the terminating point.
 	 */
-	spencer_regerror("corrupted pointers");
+	SPENCER_(regerror)("corrupted pointers");
 	return(0);
 }
 
@@ -984,11 +1064,13 @@ char *prog;
  - regrepeat - repeatedly match something simple, report how many
  */
 static int
-regrepeat(p)
-char *p;
+_regrepeat(
+	char *p,
+	RegexecCtxt ectx
+		 )
 {
 	register int count = 0;
-	register char *scan;
+	register const char *scan;
 	register char *opnd;
 
 	scan = reginput;
@@ -1017,7 +1099,7 @@ char *p;
 		}
 		break;
 	default:		/* Oh dear.  Called inappropriately. */
-		spencer_regerror("internal foulup");
+		SPENCER_(regerror)("internal foulup");
 		count = 0;	/* Best compromise. */
 		break;
 	}
@@ -1030,8 +1112,9 @@ char *p;
  - regnext - dig the "next" pointer out of a node
  */
 static char *
-regnext(p)
-register char *p;
+regnext(
+	register char *p
+	   )
 {
 	register int offset;
 
@@ -1056,8 +1139,8 @@ STATIC char *regprop();
  - regdump - dump a regexp onto stdout in vaguely comprehensible form
  */
 void
-spencer_regdump(r)
-spencer_regexp *r;
+SPENCER_(regdump)(r)
+SPENCER_(regexp) *r;
 {
 	register char *s;
 	register char op = EXACTLY;	/* Arbitrary non-END op. */
@@ -1170,7 +1253,7 @@ char *op;
 		p = "PLUS";
 		break;
 	default:
-		spencer_regerror("corrupted opcode");
+		SPENCER_(regerror)("corrupted opcode");
 		break;
 	}
 	if (p != NULL)
