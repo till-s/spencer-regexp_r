@@ -19,7 +19,7 @@
  *		be misrepresented as being the original software.
  */
 #include <stdio.h>
-#include "regexp.h"
+#include "spencer_regexp.h"
 #include "regmagic.h"
 
 #ifndef CHARBITS
@@ -32,8 +32,8 @@
  - regsub - perform substitutions after a regexp match
  */
 void
-regsub(prog, source, dest)
-regexp *prog;
+spencer_regsub(prog, source, dest)
+spencer_regexp *prog;
 char *source;
 char *dest;
 {
@@ -45,11 +45,11 @@ char *dest;
 	extern char *strncpy();
 
 	if (prog == NULL || source == NULL || dest == NULL) {
-		regerror("NULL parm to regsub");
+		spencer_regerror("NULL parm to regsub");
 		return;
 	}
 	if (UCHARAT(prog->program) != MAGIC) {
-		regerror("damaged regexp fed to regsub");
+		spencer_regerror("damaged regexp fed to regsub");
 		return;
 	}
 
@@ -70,7 +70,7 @@ char *dest;
 			(void) strncpy(dst, prog->startp[no], len);
 			dst += len;
 			if (len != 0 && *(dst-1) == '\0') {		/* strncpy hit NUL. */
-				regerror("damaged match string");
+				spencer_regerror("damaged match string");
 				return;
 			}
 		}

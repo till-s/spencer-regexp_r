@@ -23,7 +23,8 @@
  * regular-expression syntax might require a total rethink.
  */
 #include <stdio.h>
-#include "regexp.h"
+#include <string.h>
+#include "spencer_regexp.h"
 #include "regmagic.h"
 
 /*
@@ -129,7 +130,7 @@
 #define	UCHARAT(p)	((int)*(p)&CHARBITS)
 #endif
 
-#define	FAIL(m)	{ regerror(m); return(NULL); }
+#define	FAIL(m)	{ spencer_regerror(m); return(NULL); }
 #define	ISMULT(c)	((c) == '*' || (c) == '+' || (c) == '?')
 #define	META	"^$.[()|?+*\\"
 
@@ -185,11 +186,11 @@ STATIC int strcspn();
  * Beware that the optimization-preparation code in here knows about some
  * of the structure of the compiled regexp.
  */
-regexp *
-regcomp(exp)
+spencer_regexp *
+spencer_regcomp(exp)
 char *exp;
 {
-	register regexp *r;
+	register spencer_regexp *r;
 	register char *scan;
 	register char *longest;
 	register int len;
@@ -213,7 +214,7 @@ char *exp;
 		FAIL("regexp too big");
 
 	/* Allocate space. */
-	r = (regexp *)malloc(sizeof(regexp) + (unsigned)regsize);
+	r = (spencer_regexp *)malloc(sizeof(spencer_regexp) + (unsigned)regsize);
 	if (r == NULL)
 		FAIL("out of space");
 
@@ -690,7 +691,7 @@ STATIC int regrepeat();
 
 #ifdef DEBUG
 int regnarrate = 0;
-void regdump();
+void spencer_regdump();
 STATIC char *regprop();
 #endif
 
@@ -698,22 +699,21 @@ STATIC char *regprop();
  - regexec - match a regexp against a string
  */
 int
-regexec(prog, string)
-register regexp *prog;
+spencer_regexec(prog, string)
+register spencer_regexp *prog;
 register char *string;
 {
 	register char *s;
-	extern char *strchr();
 
 	/* Be paranoid... */
 	if (prog == NULL || string == NULL) {
-		regerror("NULL parameter");
+		spencer_regerror("NULL parameter");
 		return(0);
 	}
 
 	/* Check validity of program. */
 	if (UCHARAT(prog->program) != MAGIC) {
-		regerror("corrupted program");
+		spencer_regerror("corrupted program");
 		return(0);
 	}
 
@@ -761,7 +761,7 @@ register char *string;
  */
 static int			/* 0 failure, 1 success */
 regtry(prog, string)
-regexp *prog;
+spencer_regexp *prog;
 char *string;
 {
 	register int i;
@@ -802,7 +802,6 @@ char *prog;
 {
 	register char *scan;	/* Current node. */
 	char *next;		/* Next node. */
-	extern char *strchr();
 
 	scan = prog;
 #ifdef DEBUG
@@ -965,7 +964,7 @@ char *prog;
 			return(1);	/* Success! */
 			break;
 		default:
-			regerror("memory corruption");
+			spencer_regerror("memory corruption");
 			return(0);
 			break;
 		}
@@ -977,7 +976,7 @@ char *prog;
 	 * We get here only if there's trouble -- normally "case END" is
 	 * the terminating point.
 	 */
-	regerror("corrupted pointers");
+	spencer_regerror("corrupted pointers");
 	return(0);
 }
 
@@ -1018,7 +1017,7 @@ char *p;
 		}
 		break;
 	default:		/* Oh dear.  Called inappropriately. */
-		regerror("internal foulup");
+		spencer_regerror("internal foulup");
 		count = 0;	/* Best compromise. */
 		break;
 	}
@@ -1057,8 +1056,8 @@ STATIC char *regprop();
  - regdump - dump a regexp onto stdout in vaguely comprehensible form
  */
 void
-regdump(r)
-regexp *r;
+spencer_regdump(r)
+spencer_regexp *r;
 {
 	register char *s;
 	register char op = EXACTLY;	/* Arbitrary non-END op. */
@@ -1171,7 +1170,7 @@ char *op;
 		p = "PLUS";
 		break;
 	default:
-		regerror("corrupted opcode");
+		spencer_regerror("corrupted opcode");
 		break;
 	}
 	if (p != NULL)
