@@ -1,7 +1,8 @@
 #include <stdio.h>
+#include "spencer_regexp.h"
 
 void
-spencer_regerror(s)
+SPENCER_(regerror)(s)
 char *s;
 {
 	fprintf(stderr, "regexp(3): %s", s);

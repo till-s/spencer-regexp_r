@@ -32,8 +32,8 @@
  - regsub - perform substitutions after a regexp match
  */
 void
-spencer_regsub(prog, source, dest)
-spencer_regexp *prog;
+SPENCER_(regsub)(prog, source, dest)
+SPENCER_(regexp) *prog;
 char *source;
 char *dest;
 {
@@ -45,11 +45,11 @@ char *dest;
 	extern char *strncpy();
 
 	if (prog == NULL || source == NULL || dest == NULL) {
-		spencer_regerror("NULL parm to regsub");
+		SPENCER_(regerror)("NULL parm to regsub");
 		return;
 	}
 	if (UCHARAT(prog->program) != MAGIC) {
-		spencer_regerror("damaged regexp fed to regsub");
+		SPENCER_(regerror)("damaged regexp fed to regsub");
 		return;
 	}
 
@@ -70,7 +70,7 @@ char *dest;
 			(void) strncpy(dst, prog->startp[no], len);
 			dst += len;
 			if (len != 0 && *(dst-1) == '\0') {		/* strncpy hit NUL. */
-				spencer_regerror("damaged match string");
+				SPENCER_(regerror)("damaged match string");
 				return;
 			}
 		}
