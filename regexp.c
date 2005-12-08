@@ -24,6 +24,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "spencer_regexp.h"
 #include "regmagic.h"
 
@@ -240,7 +241,6 @@ const char *exp;
 	register char *longest;
 	register int len;
 	int flags;
-	extern char *malloc();
 	RegcompCtxtRec ctx;
 #define cctx (&ctx)
 
