@@ -6,6 +6,7 @@ AC_CANONICAL_HOST
 AC_PROG_INSTALL
 AC_PROG_CC
 AC_PROG_RANLIB
+AC_CHECK_TOOL(AR,ar)
 
 dnl RTEMS build seems to work fine with standard makefile
 dnl
