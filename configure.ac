@@ -8,16 +8,9 @@ AC_PROG_CC
 AC_PROG_RANLIB
 AC_CHECK_TOOL(AR,ar)
 
-dnl RTEMS build seems to work fine with standard makefile
-dnl
-dnl if test "$host_os" == "rtems" ; then
-dnl template=Makefile.rtems.in
-dnl else
+AM_ENABLE_MULTILIB([Makefile],[..])
+dnl install multilibs into MULTISUBDIR
+AC_SUBST(libdir,[${libdir}'$(MULTISUBDIR)'])
 
-dnl template=Makefile.in
-
-dnl fi
-
-dnl AC_CONFIG_FILES(Makefile:$template)
 AC_CONFIG_FILES(Makefile)
 AC_OUTPUT
