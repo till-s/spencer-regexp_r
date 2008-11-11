@@ -1,5 +1,5 @@
 AC_INIT(regexp, unknown, unknown)
-AM_INIT_AUTOMAKE(regexp, unknown)
+AM_INIT_AUTOMAKE([foreign 1.10])
 AM_MAINTAINER_MODE
 AC_CANONICAL_HOST
 
