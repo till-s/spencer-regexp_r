@@ -24,6 +24,7 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include "spencer_regexp.h"
 #include "regmagic.h"
 
@@ -113,7 +114,7 @@
  * but allows patterns to get big without disasters.
  */
 #define	OP(p)	(*(p))
-#define	NEXT(p)	(((*((p)+1)&0377)<<8) + *((p)+2)&0377)
+#define	NEXT(p)	(((*((p)+1)&0377)<<8) + (*((p)+2)&0377))
 #define	OPERAND(p)	((p) + 3)
 
 /*
@@ -182,10 +183,14 @@ STATIC char * _regpiece(int *flagp, RegcompCtxt cctx);
 STATIC char * _regatom(int *flagp, RegcompCtxt cctx);
 STATIC char * _regnode(char op, RegcompCtxt cctx);
 STATIC char * regnext(register char *p);
+/*
 STATIC void _regc(char b, RegcompCtxt cctx);
+*/
 STATIC void _reginsert(char op, char *opnd, RegcompCtxt cctx);
 STATIC void _regtail(char *p, char *val, RegcompCtxt cctx);
+/*
 STATIC void _regoptail(char *p, char *val, RegcompCtxt cctx);
+*/
 #define reg(paren, flagp)	_reg(paren, flagp, cctx)
 #define regbranch(flagp)	_regbranch(flagp, cctx)
 #define regpiece(flagp)		_regpiece(flagp, cctx)
@@ -208,7 +213,7 @@ STATIC int strcspn();
 #define _regoptail(p, val, cctx) \
 		do {  \
 			char *regoptail_body_buf = p; \
-			regoptail_body(p,val); \
+			regoptail_body(regoptail_body_buf,val); \
 		} while (0)
 
 
@@ -236,7 +241,6 @@ const char *exp;
 	register char *longest;
 	register int len;
 	int flags;
-	extern char *malloc();
 	RegcompCtxtRec ctx;
 #define cctx (&ctx)
 
@@ -328,7 +332,7 @@ _reg(
 	register char *ret;
 	register char *br;
 	register char *ender;
-	register int parno;
+	register int parno = 0; /* silence warning */
 	int flags;
 
 	*flagp = HASWIDTH;	/* Tentatively. */
