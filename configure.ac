@@ -1,22 +1,14 @@
 AC_INIT(regexp, unknown, unknown)
-AM_INIT_AUTOMAKE(regexp, unknown)
+AM_INIT_AUTOMAKE([foreign 1.10])
 AM_MAINTAINER_MODE
 AC_CANONICAL_HOST
 
 AC_PROG_INSTALL
 AC_PROG_CC
-AC_PROG_RANLIB
+RTEMS_CHECK_TOOL(RANLIB,ranlib)
+RTEMS_CHECK_TOOL(AR,ar)
 
-dnl RTEMS build seems to work fine with standard makefile
-dnl
-dnl if test "$host_os" == "rtems" ; then
-dnl template=Makefile.rtems.in
-dnl else
+TILLAM_MULTISUB_INSTALLDIR
 
-dnl template=Makefile.in
-
-dnl fi
-
-dnl AC_CONFIG_FILES(Makefile:$template)
 AC_CONFIG_FILES(Makefile)
 AC_OUTPUT
